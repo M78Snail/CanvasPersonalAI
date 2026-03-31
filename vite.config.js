@@ -13,8 +13,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/v1': {
-        target: 'https://api.chatfire.site',
+      '/api/v3': {
+        target: 'https://ark.cn-beijing.volces.com',
         changeOrigin: true
       }
     }

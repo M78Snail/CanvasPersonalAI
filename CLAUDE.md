@@ -78,7 +78,7 @@ src/
 ### 核心业务流程
 
 **工作流自动执行** (`useWorkflowOrchestrator.js`):
-1. 用户输入文本 → LLM 分析意图 (GPT-4o)
+1. 用户输入文本 → LLM 分析意图 (DeepSeek V3.2)
 2. 识别工作流类型 → 自动创建节点和边
 3. 串行执行配置节点 → 生成图片/视频展示结果
 
@@ -89,12 +89,12 @@ src/
 
 ### API 端点
 
-- `/v1/images/generations` - 图像生成 (OpenAI 兼容)
-- `/v1/videos/generations` - 视频生成
-- `/v1/chat/completions` - 对话补全 (OpenAI 兼容)
-- `/v1/models` - 模型列表
+- `/api/v3/images/generations` - 图像生成 (OpenAI 兼容)
+- `/api/v3/video/generations` - 视频生成
+- `/api/v3/chat/completions` - 对话补全 (OpenAI 兼容)
+- `/api/v3/models` - 模型列表
 
-开发服务器代理 `/v1` → `https://api.chatfire.site`
+开发服务器代理 `/api/v3` → `https://ark.cn-beijing.volces.com/api/v3`
 
 ## 构建配置
 
@@ -104,19 +104,15 @@ src/
 
 ## API 配置说明
 
-**两个 API 渠道：**
-- **火宝 (chatfire)**: `https://api.chatfire.site`
-- **OpenAI**: `https://api.chatfire.cn`
+**仅支持火山引擎 (volcengine) 渠道：**
+- **火山引擎**: `https://ark.cn-beijing.volces.com`
 
-**Provider 选择逻辑：**
-- Provider 是**全局选择**的，用户在 API 设置中切换
-- 模型配置中的 `provider: ['chatfire']` 仅用于**可用性过滤**（表示该模型在哪些渠道下显示）
-- 实际访问的接口地址由**当前选中的 Provider** 决定，与模型本身的 provider 配置无关
+**模型配置：**
+- 对话模型：仅 DeepSeek V3.2 (`deepseek-v3-2-251201`)
 
-**模型分类：**
-- 文生图：4 种（Nano Banana 2/Pro、豆包 Seedream 4.5、Nano Banana）- 仅火宝
-- 视频生成：5 种（Seedance 系列）- 仅火宝
-- 对话模型：GPT-4o Mini/4o/5.2、DeepSeek、豆包 Seed Flash、Gemini 3 Pro
+**火山引擎适配说明：**
+- 火山引擎 API 完全兼容 OpenAI 格式
+- 对话端点：`POST /api/v3/chat/completions`
 
 ## 重要注意事项
 

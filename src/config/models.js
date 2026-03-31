@@ -218,12 +218,7 @@ export const VIDEO_MODELS = [
 
 // Chat/LLM models | 对话模型
 export const CHAT_MODELS = [
-    { label: 'GPT-4o Mini', key: 'gpt-4o-mini', provider: ['openai'] },
-    { label: 'GPT-4o', key: 'gpt-4o', provider: ['openai'] },
-    { label: 'GPT-5.2', key: 'gpt-5.2', provider: ['openai'] },
-    { label: 'DeepSeek Chat', key: 'deepseek-chat', provider: ['openai', 'chatfire'] },
-    { label: '豆包 Seed Flash', key: 'doubao-seed-1-6-flash-250615', provider: ['chatfire'] },
-    { label: 'Gemini 3 Pro', key: 'gemini-3-pro', provider: ['openai'] }
+    { label: 'DeepSeek V3.2', key: 'deepseek-v3-2-251201', provider: ['volcengine'] }
 ]
 
 // Image size options | 图片尺寸选项
@@ -257,7 +252,7 @@ export const VIDEO_DURATION_OPTIONS = [
 // Default values | 默认值
 export const DEFAULT_IMAGE_MODEL = 'nano-banana-pro'
 export const DEFAULT_VIDEO_MODEL = 'doubao-seedance-1-5-pro-251215'
-export const DEFAULT_CHAT_MODEL = 'gpt-4o-mini'
+export const DEFAULT_CHAT_MODEL = 'deepseek-v3-2-251201'
 export const DEFAULT_IMAGE_SIZE = '2048x2048'
 export const DEFAULT_VIDEO_RATIO = '16:9'
 export const DEFAULT_VIDEO_DURATION = 5
