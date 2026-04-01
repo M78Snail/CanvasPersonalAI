@@ -32,11 +32,29 @@ export const PROVIDERS = {
           model: params.model,
           prompt: params.prompt
         }
+        // 火山引擎支持的参数
         if (params.size) adapted.size = params.size
         if (params.n) adapted.n = params.n
         if (params.quality) adapted.quality = params.quality
         if (params.style) adapted.style = params.style
-        if (params.image) adapted.image = params.image
+        // 支持单图或多图输入 (image 可以是 string 或 array)
+        if (params.image) {
+          // 如果是数组且只有一张图，转换为单图
+          if (Array.isArray(params.image)) {
+            adapted.image = params.image.length === 1 ? params.image[0] : params.image
+          } else {
+            adapted.image = params.image
+          }
+        }
+        // 输出格式
+        if (params.output_format) adapted.output_format = params.output_format
+        // 水印
+        if (params.watermark !== undefined) adapted.watermark = params.watermark
+        // 组图生成相关
+        if (params.sequential_image_generation) adapted.sequential_image_generation = params.sequential_image_generation
+        if (params.sequential_image_generation_options) adapted.sequential_image_generation_options = params.sequential_image_generation_options
+        // 提示词优化
+        if (params.optimize_prompt_options) adapted.optimize_prompt_options = params.optimize_prompt_options
         return adapted
       },
       video: (params) => {
@@ -63,7 +81,9 @@ export const PROVIDERS = {
         const data = response.data || response
         return (Array.isArray(data) ? data : [data]).map(item => ({
           url: item.url || item.b64_json || '',
-          revisedPrompt: item.revised_prompt || ''
+          revisedPrompt: item.revised_prompt || '',
+          size: item.size || '', // 火山引擎返回的尺寸
+          b64_json: item.b64_json || ''
         }))
       },
       video: (response) => {

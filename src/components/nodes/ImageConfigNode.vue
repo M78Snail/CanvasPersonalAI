@@ -76,6 +76,23 @@
           </div>
         </div>
 
+        <!-- Output format selector | 输出格式选择 -->
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-[var(--text-secondary)]">格式</span>
+          <n-dropdown :options="outputFormatOptions" @select="handleOutputFormatSelect">
+            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+              {{ displayOutputFormat }}
+              <n-icon :size="12"><ChevronForwardOutline /></n-icon>
+            </button>
+          </n-dropdown>
+        </div>
+
+        <!-- Watermark toggle | 水印开关 -->
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-[var(--text-secondary)]">水印</span>
+          <n-switch v-model:value="localWatermark" size="small" @update:value="handleWatermarkChange" />
+        </div>
+
         <!-- Model tips | 模型提示 -->
         <div v-if="currentModelConfig?.tips" class="text-xs text-[var(--text-tertiary)] bg-[var(--bg-tertiary)] rounded px-2 py-1">
           💡 {{ currentModelConfig.tips }}
@@ -160,7 +177,7 @@
  */
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { NIcon, NDropdown, NSpin } from 'naive-ui'
+import { NIcon, NDropdown, NSpin, NSwitch } from 'naive-ui'
 import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline } from '@vicons/ionicons5'
 import { useImageGeneration } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'
@@ -189,8 +206,10 @@ const { loading, error, images: generatedImages, generate } = useImageGeneration
 // Local state | 本地状态
 const showHandleMenu = ref(false)
 const localModel = ref(props.data?.model || DEFAULT_IMAGE_MODEL)
-const localSize = ref(props.data?.size || '2048x2048')
+const localSize = ref(props.data?.size || '2K')
 const localQuality = ref(props.data?.quality || 'standard')
+const localOutputFormat = ref(props.data?.output_format || 'png')
+const localWatermark = ref(props.data?.watermark !== undefined ? props.data.watermark : false)
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -280,6 +299,18 @@ const displaySize = computed(() => {
   return option?.label || localSize.value
 })
 
+// Output format options | 输出格式选项
+const outputFormatOptions = [
+  { label: 'PNG', key: 'png' },
+  { label: 'JPEG', key: 'jpeg' }
+]
+
+// Display output format | 显示输出格式
+const displayOutputFormat = computed(() => {
+  const option = outputFormatOptions.find(o => o.key === localOutputFormat.value)
+  return option?.label || localOutputFormat.value
+})
+
 // Initialize on mount | 挂载时初始化
 onMounted(() => {
   // 检查当前模型是否在可用模型列表中
@@ -289,8 +320,21 @@ onMounted(() => {
   if (!localModel.value || !isModelAvailable) {
     // 使用 store 中的默认模型或第一个可用模型
     localModel.value = modelStore.selectedImageModel || availableModels[0]?.key || DEFAULT_IMAGE_MODEL
-    updateNode(props.id, { model: localModel.value })
   }
+
+  // 初始化新参数
+  if (props.data?.output_format !== undefined) {
+    localOutputFormat.value = props.data.output_format
+  }
+  if (props.data?.watermark !== undefined) {
+    localWatermark.value = props.data.watermark
+  }
+
+  updateNode(props.id, {
+    model: localModel.value,
+    output_format: localOutputFormat.value,
+    watermark: localWatermark.value
+  })
 })
 
 // 解析 textNode 内容中的 @ 引用，转换为简短引用（如 图 1）并收集图片
@@ -486,19 +530,32 @@ const handleModelSelect = (key) => {
   let defaultSize = config?.defaultParams?.size
 
   if (!defaultSize && newSizeOptions.length > 0) {
-    // 备用逻辑：查找 2048 或最接近的尺寸
-    defaultSize = newSizeOptions.find(o => o.key === '2048x2048')?.key
-      || newSizeOptions.find(o => o.key.includes('1024'))?.key
+    // 备用逻辑：查找 2K 或最接近的尺寸
+    defaultSize = newSizeOptions.find(o => o.key === '2K')?.key
+      || newSizeOptions.find(o => o.key === '2048x2048')?.key
+      || newSizeOptions.find(o => o.key.includes('2048'))?.key
       || newSizeOptions[0].key
   }
 
   localSize.value = defaultSize
 
+  // 同步 Output Format 到模型默认值
+  if (config?.defaultParams?.output_format) {
+    localOutputFormat.value = config.defaultParams.output_format
+  }
+
+  // 同步 Watermark 到模型默认值
+  if (config?.defaultParams?.watermark !== undefined) {
+    localWatermark.value = config.defaultParams.watermark
+  }
+
   // 更新节点数据
   updateNode(props.id, {
     model: key,
     quality: localQuality.value,
-    size: defaultSize
+    size: defaultSize,
+    output_format: localOutputFormat.value,
+    watermark: localWatermark.value
   })
 }
 
@@ -520,6 +577,17 @@ const handleQualitySelect = (quality) => {
 const handleSizeSelect = (size) => {
   localSize.value = size
   updateNode(props.id, { size })
+}
+
+// Handle output format selection | 处理输出格式选择
+const handleOutputFormatSelect = (format) => {
+  localOutputFormat.value = format
+  updateNode(props.id, { output_format: format })
+}
+
+// Handle watermark change | 处理水印开关变更
+const handleWatermarkChange = (value) => {
+  updateNode(props.id, { watermark: value })
 }
 
 // Update size from manual input | 更新手动输入的尺寸
@@ -652,6 +720,8 @@ const handleGenerate = async (mode = 'auto') => {
       prompt: prompt,
       size: localSize.value,
       quality: localQuality.value,
+      output_format: localOutputFormat.value,
+      watermark: localWatermark.value,
       n: 1
     }
 
@@ -743,6 +813,29 @@ watch(() => props.data?.model, (newModel) => {
     if (config?.defaultParams?.size) {
       localSize.value = config.defaultParams.size
     }
+
+    // 同步 Output Format
+    if (config?.defaultParams?.output_format) {
+      localOutputFormat.value = config.defaultParams.output_format
+    }
+
+    // 同步 Watermark
+    if (config?.defaultParams?.watermark !== undefined) {
+      localWatermark.value = config.defaultParams.watermark
+    }
+  }
+})
+
+// 监听数据变化，同步本地状态
+watch(() => props.data?.output_format, (newFormat) => {
+  if (newFormat !== undefined && newFormat !== localOutputFormat.value) {
+    localOutputFormat.value = newFormat
+  }
+})
+
+watch(() => props.data?.watermark, (newWatermark) => {
+  if (newWatermark !== undefined && newWatermark !== localWatermark.value) {
+    localWatermark.value = newWatermark
   }
 })
 

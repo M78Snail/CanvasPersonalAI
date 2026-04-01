@@ -48,53 +48,25 @@ export const BANANA_SIZE_OPTIONS = [
 // Image generation models | 图片生成模型
 export const IMAGE_MODELS = [
     {
-        label: 'Nano Banana 2',
-        key: 'nano-banana-2',
-        provider: ['chatfire'], // 火宝渠道
-        sizes: BANANA_SIZE_OPTIONS.map(s => s.key),
-        // qualities: SEEDREAM_QUALITY_OPTIONS,
-        // getSizesByQuality: (quality) => quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS,
-        defaultParams: {
-            size: '1x1',
-            quality: 'standard',
-            style: 'vivid'
-        }
-    },
-    {
-        label: 'Nano Banana Pro',
-        key: 'nano-banana-pro',
-        provider: ['chatfire'], // 火宝渠道
-        sizes: BANANA_SIZE_OPTIONS.map(s => s.key),
-        // qualities: SEEDREAM_QUALITY_OPTIONS,
-        // getSizesByQuality: (quality) => quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS,
-        defaultParams: {
-            size: '1x1',
-            quality: 'standard',
-            style: 'vivid'
-        }
-    },
-    {
         label: '豆包 Seedream 4.5',
         key: 'doubao-seedream-4-5-251128',
-        provider: ['chatfire'], // 火宝渠道
+        provider: ['chatfire', 'volcengine'], // 火宝渠道 + 火山引擎
         sizes: SEEDREAM_SIZE_OPTIONS.map(s => s.key),
         qualities: SEEDREAM_QUALITY_OPTIONS,
         getSizesByQuality: (quality) => quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS,
+        // 火山引擎支持的尺寸选项 (2K/4K 分辨率标识)
+        sizeOptions: [
+            { label: '2K', key: '2K' },
+            { label: '4K', key: '4K' },
+            ...SEEDREAM_SIZE_OPTIONS,
+            ...SEEDREAM_4K_SIZE_OPTIONS
+        ],
         defaultParams: {
-            size: '2048x2048',
+            size: '2K',
             quality: 'standard',
-            style: 'vivid'
-        }
-    },
-    {
-        label: 'Nano Banana',
-        key: 'nano-banana',
-        provider: ['chatfire'], // 火宝渠道
-        tips: '尺寸写在提示词中: 尺寸 9:16',
-        sizes: [],
-        defaultParams: {
-            quality: 'standard',
-            style: 'vivid'
+            style: 'vivid',
+            output_format: 'png',
+            watermark: false
         }
     },
 
@@ -250,7 +222,7 @@ export const VIDEO_DURATION_OPTIONS = [
 ]
 
 // Default values | 默认值
-export const DEFAULT_IMAGE_MODEL = 'nano-banana-pro'
+export const DEFAULT_IMAGE_MODEL = 'doubao-seedream-4-5-251128'
 export const DEFAULT_VIDEO_MODEL = 'doubao-seedance-1-5-pro-251215'
 export const DEFAULT_CHAT_MODEL = 'deepseek-v3-2-251201'
 export const DEFAULT_IMAGE_SIZE = '2048x2048'

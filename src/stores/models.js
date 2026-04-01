@@ -68,14 +68,19 @@ export const getModelConfig = (modelKey) => {
  */
 export const getModelSizeOptions = (modelKey, quality = 'standard') => {
   const model = IMAGE_MODELS.find(m => m.key === modelKey)
-  
+
+  // 如果模型有自定义的 sizeOptions，直接使用
+  if (model?.sizeOptions) {
+    return model.sizeOptions
+  }
+
   // If model has getSizesByQuality function, use it | 如果模型有 getSizesByQuality 函数，使用它
   if (model?.getSizesByQuality) {
     return model.getSizesByQuality(quality)
   }
-  
+
   if (!model?.sizes) return SEEDREAM_SIZE_OPTIONS
-  
+
   // Convert sizes array to dropdown options | 转换 sizes 数组为下拉选项
   const sizeOptions = quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS
   return model.sizes.map(size => {
