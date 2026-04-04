@@ -132,6 +132,10 @@
   <MentionsPicker v-model:visible="showMentionsPicker" :position="mentionsPosition" context="llmConfig"
     :showSearch="false" :connectedNodeIds="hasConnectedNodes ? connectedTextNodeIds : []"
     @select="handleMentionSelect" />
+
+  <!-- Prompt presets picker | / 预置词选择器 -->
+  <PromptPresetsPicker v-model:visible="showPresetsPicker" :position="presetsPosition"
+    @select="handlePresetSelect" />
 </template>
 
 <script setup>
@@ -146,6 +150,7 @@ import { TrashOutline, CopyOutline, ChatbubbleOutline, SparklesOutline, ListOutl
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, addNodes, addEdges, nodes, edges, startBatchOperation, endBatchOperation } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import MentionsPicker from '../MentionsPicker.vue'
+import PromptPresetsPicker from '../PromptPresetsPicker.vue'
 import { useChat } from '../../hooks'
 import { useModelStore } from '../../stores/pinia'
 import { parseMentions, removeMention as removeMentionUtil } from '../../hooks/useNodeRef'
@@ -166,7 +171,7 @@ const showHandleMenu = ref(false)
 const systemPrompt = ref(props.data?.systemPrompt || '')
 const systemPromptRef = ref(null)
 const textareaWrapper = ref(null)
-const placeholder = '设定 AI 的角色和行为规则，输入 @ 可引用文本节点...'
+const placeholder = '设定 AI 的角色和行为规则，输入 @ 可引用文本节点，输入 / 可选择预置词...'
 const lastContent = ref('')  // 上一次的内容，用于检测变化
 
 // Label editing state | Label 编辑状态
@@ -181,6 +186,10 @@ const nodeLabel = computed(() => props.data?.label || 'LLM 文本生成')
 const showMentionsPicker = ref(false)
 const mentionsPosition = ref({ x: 0, y: 0 })
 const mentionSearchStart = ref(-1)
+
+// Prompt presets picker state | / 预置词选择器状态
+const showPresetsPicker = ref(false)
+const presetsPosition = ref({ x: 0, y: 0 })
 
 // 内部更新标志
 let isInternalUpdate = false
@@ -435,12 +444,19 @@ const handleSelect = (item) => {
   window.$message?.success(`已创建${item.label}节点`)
 }
 
-// Handle keydown for mentions | 处理 @ 选择器的键盘事件
+// Handle keydown for mentions | 处理 @ 选择器和 / 预置词选择器的键盘事件
 const handleKeydown = (e) => {
   // 规范化 Shift+Enter 插入换行
   if (e.key === 'Enter' && e.shiftKey) {
     e.preventDefault()
     document.execCommand('insertLineBreak')
+    return
+  }
+
+  // 注意：预置词选择器自己处理键盘事件，这里不需要处理
+  // 如果预置词选择器显示中，阻止除了 Shift+Enter 外的 Enter 键
+  if (showPresetsPicker.value && e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
     return
   }
 
@@ -475,6 +491,38 @@ const handleKeydown = (e) => {
     }
     return
   }
+
+  // 检测 "/" 键
+  if (e.key === '/') {
+    // 不阻止默认行为，让 "/" 字符先输入
+    nextTick(() => {
+      const editor = systemPromptRef.value
+      if (!editor) return
+
+      const selection = window.getSelection()
+      if (!selection.rangeCount) return
+
+      const range = selection.getRangeAt(0)
+      const cursorPos = getTextPositionBeforeCursor(editor, range)
+      const fullText = getEditableText()
+      const textBeforeCursor = fullText.slice(0, cursorPos)
+
+      // 检查是否刚刚输入了 "/"
+      const lastSlashIndex = textBeforeCursor.lastIndexOf('/')
+      if (lastSlashIndex !== -1) {
+        const textAfterSlash = textBeforeCursor.slice(lastSlashIndex + 1)
+        // 只有在 "/" 后没有字符（或只有空格）时才显示
+        if (!textAfterSlash || textAfterSlash.trim() === '') {
+          showPresetsPicker.value = true
+          const rect = editor.getBoundingClientRect()
+          presetsPosition.value = {
+            x: rect.left + 10,
+            y: rect.bottom + 5
+          }
+        }
+      }
+    })
+  }
 }
 
 // Handle mention selection | 处理 @ 引用选择
@@ -491,6 +539,58 @@ const handleMentionSelect = ({ nodeId }) => {
   // 更新 store
   updateConfig()
   showMentionsPicker.value = false
+}
+
+// Handle preset selection | 处理预置词选择
+const handlePresetSelect = ({ description }) => {
+  const editor = systemPromptRef.value
+  if (!editor) return
+
+  const selection = window.getSelection()
+  if (!selection.rangeCount) return
+
+  const range = selection.getRangeAt(0)
+  const cursorPos = getTextPositionBeforeCursor(editor, range)
+  const fullText = getEditableText()
+  const textBeforeCursor = fullText.slice(0, cursorPos)
+  const lastSlashIndex = textBeforeCursor.lastIndexOf('/')
+
+  // 替换 "/" 为预置词描述
+  if (lastSlashIndex !== -1) {
+    // 构建新内容
+    const newText = textBeforeCursor.slice(0, lastSlashIndex) + description + fullText.slice(cursorPos)
+    systemPrompt.value = newText
+
+    // 更新编辑器
+    nextTick(() => {
+      setEditableContent(newText)
+      updateConfig()
+
+      // 将光标移到插入内容之后
+      nextTick(() => {
+        const newRange = document.createRange()
+        const targetPos = lastSlashIndex + description.length
+
+        // 找到合适的位置设置光标
+        const el = systemPromptRef.value
+        if (el.firstChild) {
+          newRange.setStart(el.firstChild, Math.min(targetPos, el.firstChild.length || 0))
+        } else {
+          newRange.setStart(el, 0)
+        }
+        newRange.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(newRange)
+
+        // 自动执行生成
+        setTimeout(() => {
+          handleGenerate()
+        }, 100)
+      })
+    })
+  }
+
+  showPresetsPicker.value = false
 }
 
 // Remove mention | 移除提及
@@ -554,7 +654,7 @@ const isNodeInside = (parent, child) => {
   return false
 }
 
-// Handle input for @ trigger | 处理 @ 触发输入
+// Handle input for @ trigger and / trigger | 处理 @ 触发输入和 / 触发输入
 const handleInput = (e) => {
   const editor = e.target
   isInternalUpdate = true
@@ -575,11 +675,28 @@ const handleInput = (e) => {
   const fullText = getEditableText()
   const textBeforeCursor = fullText.slice(0, cursorPos)
 
-  // Check if cursor is after @ character | 检查光标是否在 @ 字符后
+  // 优先处理 "/" 预置词选择器
+  const lastSlashIndex = textBeforeCursor.lastIndexOf('/')
   const lastAtIndex = textBeforeCursor.lastIndexOf('@')
 
-  if (lastAtIndex !== -1) {
-    // Check if there's a space after @ (meaning user finished typing mention) | 检查 @ 后面是否有空格（用户已完成输入）
+  // 判断哪个触发字符更靠近光标
+  if (lastSlashIndex > lastAtIndex) {
+    // 处理 "/" 预置词
+    const textAfterSlash = textBeforeCursor.slice(lastSlashIndex + 1)
+    // 只有在 "/" 后没有空格时才显示
+    if (!textAfterSlash.includes(' ')) {
+      showPresetsPicker.value = true
+      showMentionsPicker.value = false
+
+      const rect = editor.getBoundingClientRect()
+      presetsPosition.value = {
+        x: rect.left + 10,
+        y: rect.bottom + 5
+      }
+      return
+    }
+  } else if (lastAtIndex !== -1) {
+    // 处理 "@" 引用
     const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1)
 
     // Check if there's a complete @[...] mention - 检查是否有完整的 @[...] 配对
@@ -591,6 +708,7 @@ const handleInput = (e) => {
     if (!textAfterAt.includes(' ') && !hasCompleteMention && hasConnectedNodes.value) {
       // Calculate position | 计算位置
       showMentionsPicker.value = true
+      showPresetsPicker.value = false
       mentionSearchStart.value = lastAtIndex
 
       // Get editor position | 获取 editor 位置
@@ -603,8 +721,9 @@ const handleInput = (e) => {
     }
   }
 
-  // Hide picker if conditions not met | 如果条件不满足，隐藏选择器
+  // Hide pickers if conditions not met | 如果条件不满足，隐藏选择器
   showMentionsPicker.value = false
+  showPresetsPicker.value = false
 }
 
 // Handle blur | 处理失去焦点
@@ -612,6 +731,7 @@ const handleBlur = () => {
   // Delay hiding picker to allow click event | 延迟隐藏选择器以允许点击事件
   setTimeout(() => {
     showMentionsPicker.value = false
+    // 注意：showPresetsPicker 由选择器组件自己管理关闭
   }, 200)
   // 同步内容到 store
   updateConfig()
