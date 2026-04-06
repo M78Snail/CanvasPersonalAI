@@ -134,7 +134,7 @@
     @select="handleMentionSelect" />
 
   <!-- Prompt presets picker | / 预置词选择器 -->
-  <PromptPresetsPicker v-model:visible="showPresetsPicker" :position="presetsPosition"
+  <PromptPresetsPicker v-model:visible="showPresetsPicker" :position="presetsPosition" context="llmConfig"
     @select="handlePresetSelect" />
 </template>
 

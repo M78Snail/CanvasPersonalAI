@@ -68,6 +68,11 @@ const props = defineProps({
   position: {
     type: Object,
     default: () => ({ x: 0, y: 0 })
+  },
+  // 上下文：'imageConfig' 表示文生图节点，'llmConfig' 表示LLM节点，其他或不填表示全部
+  context: {
+    type: String,
+    default: ''
   }
 })
 
@@ -87,11 +92,31 @@ const pickerStyle = computed(() => ({
 }))
 
 // 获取所有分类
-const categories = computed(() => ['全部', ...new Set(PROMPT_PRESETS.map(p => p.category))])
+const categories = computed(() => {
+  let filteredPresets = PROMPT_PRESETS
+
+  // 按上下文过滤
+  if (props.context === 'imageConfig') {
+    filteredPresets = filteredPresets.filter(p => p.category === '短剧生图')
+  } else if (props.context === 'llmConfig') {
+    filteredPresets = filteredPresets.filter(p => p.category !== '短剧生图')
+  }
+
+  return ['全部', ...new Set(filteredPresets.map(p => p.category))]
+})
 
 // 过滤后的预置词列表
 const filteredPresets = computed(() => {
   let result = PROMPT_PRESETS
+
+  // 按上下文过滤
+  if (props.context === 'imageConfig') {
+    // 文生图节点：只显示"短剧生图"分类
+    result = result.filter(p => p.category === '短剧生图')
+  } else if (props.context === 'llmConfig') {
+    // LLM节点：显示除"短剧生图"外的所有分类
+    result = result.filter(p => p.category !== '短剧生图')
+  }
 
   // 按分类过滤
   if (selectedCategory.value !== '全部') {

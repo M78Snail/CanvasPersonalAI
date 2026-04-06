@@ -3,7 +3,7 @@
   <div class="image-config-node-wrapper" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- Image config node | 文生图配置节点 -->
     <div
-      class="image-config-node bg-[var(--bg-secondary)] rounded-xl border min-w-[300px] transition-all duration-200"
+      class="image-config-node bg-[var(--bg-secondary)] rounded-xl border min-w-[320px] transition-all duration-200"
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'">
       <!-- Header | 头部 -->
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
@@ -38,6 +38,16 @@
 
       <!-- Config options | 配置选项 -->
       <div class="p-3 space-y-3">
+        <!-- Quick prompt input | 快速提示词输入 -->
+        <div class="relative">
+          <label class="text-xs text-[var(--text-secondary)] mb-1 block">快速提示词（输入/选择预置词）</label>
+          <div class="textarea-wrapper" ref="textareaWrapper">
+            <div ref="promptInputRef" class="editor-content" contenteditable="true" @input="handlePromptInput"
+              @keydown="handlePromptKeydown" @paste="handlePromptPaste" @blur="handlePromptBlur" @wheel.stop @mousedown.stop
+              :data-placeholder="promptPlaceholder"></div>
+          </div>
+        </div>
+
         <!-- Model selector | 模型选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">模型</span>
@@ -167,6 +177,9 @@
       <NodeHandleMenu :nodeId="id" nodeType="imageConfig" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
     </div>
 
+    <!-- Prompt presets picker | / 预置词选择器 -->
+    <PromptPresetsPicker v-model:visible="showPresetsPicker" :position="presetsPosition" context="imageConfig"
+      @select="handlePresetSelect" />
   </div>
 </template>
 
@@ -182,6 +195,7 @@ import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, R
 import { useImageGeneration } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
+import PromptPresetsPicker from '../PromptPresetsPicker.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getModelSizeOptions, getModelQualityOptions, getModelConfig, DEFAULT_IMAGE_MODEL } from '../../stores/models'
 import { parseMentions } from '../../hooks/useNodeRef'
@@ -211,10 +225,274 @@ const localQuality = ref(props.data?.quality || 'standard')
 const localOutputFormat = ref(props.data?.output_format || 'png')
 const localWatermark = ref(props.data?.watermark !== undefined ? props.data.watermark : false)
 
+// Quick prompt input state | 快速提示词输入状态
+const promptInputRef = ref(null)
+const textareaWrapper = ref(null)
+const quickPrompt = ref('')
+const promptPlaceholder = '输入提示词或按 / 选择短剧相关预置词...'
+const lastPromptContent = ref('')
+let isInternalPromptUpdate = false
+
+// Prompt presets picker state | / 预置词选择器状态
+const showPresetsPicker = ref(false)
+const presetsPosition = ref({ x: 0, y: 0 })
+
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
 const editingLabelValue = ref('')
 const labelInputRef = ref(null)
+
+// ============ 快速提示词输入相关逻辑 ============
+
+// 从 contenteditable 中提取纯文本
+const getPromptEditableText = () => {
+  const el = promptInputRef.value
+  if (!el) return ''
+  let text = ''
+  const walk = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.tagName === 'BR') {
+        text += '\n'
+      } else {
+        node.childNodes.forEach(walk)
+      }
+    }
+  }
+  el.childNodes.forEach(walk)
+  return text
+}
+
+// 设置 contenteditable 内容（纯文本）
+const setPromptEditableContent = (text) => {
+  if (!promptInputRef.value) return
+  promptInputRef.value.innerHTML = ''
+  if (text) {
+    promptInputRef.value.textContent = text
+  }
+}
+
+// 根据 DOM 光标位置计算纯文本中的位置
+const getPromptTextPositionBeforeCursor = (editor, range) => {
+  const container = editor
+  let textLength = 0
+  let found = false
+
+  const walk = (node) => {
+    if (found) return
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const nodeLength = node.textContent.length
+      if (range.startContainer === node) {
+        textLength += range.startOffset
+        found = true
+        return
+      }
+      textLength += nodeLength
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.tagName === 'BR') {
+        textLength += 1
+      } else {
+        for (const child of node.childNodes) {
+          walk(child)
+          if (found) return
+        }
+      }
+    }
+  }
+
+  walk(container)
+  return textLength
+}
+
+// Handle prompt paste - 纯文本粘贴
+const handlePromptPaste = (e) => {
+  e.preventDefault()
+  const text = e.clipboardData?.getData('text/plain') || ''
+  document.execCommand('insertText', false, text)
+}
+
+// Handle prompt input for / trigger | 处理 / 触发输入
+const handlePromptInput = (e) => {
+  const editor = e.target
+  isInternalPromptUpdate = true
+  quickPrompt.value = getPromptEditableText()
+  lastPromptContent.value = quickPrompt.value
+  nextTick(() => { isInternalPromptUpdate = false })
+
+  // 获取光标位置
+  const selection = window.getSelection()
+  if (!selection.rangeCount) return
+
+  const range = selection.getRangeAt(0)
+  const cursorPos = getPromptTextPositionBeforeCursor(editor, range)
+  const fullText = getPromptEditableText()
+  const textBeforeCursor = fullText.slice(0, cursorPos)
+
+  // 检查 "/" 触发
+  const lastSlashIndex = textBeforeCursor.lastIndexOf('/')
+
+  if (lastSlashIndex !== -1) {
+    const textAfterSlash = textBeforeCursor.slice(lastSlashIndex + 1)
+    // 只有在 "/" 后没有字符（或只有空格）时才显示
+    if (!textAfterSlash || textAfterSlash.trim() === '') {
+      showPresetsPicker.value = true
+      const rect = editor.getBoundingClientRect()
+      presetsPosition.value = {
+        x: rect.left + 10,
+        y: rect.bottom + 5
+      }
+      return
+    }
+  }
+
+  // 隐藏选择器
+  showPresetsPicker.value = false
+}
+
+// Handle prompt keydown | 处理提示词键盘事件
+const handlePromptKeydown = (e) => {
+  // 规范化 Shift+Enter 插入换行
+  if (e.key === 'Enter' && e.shiftKey) {
+    e.preventDefault()
+    document.execCommand('insertLineBreak')
+    return
+  }
+
+  // 如果预置词选择器显示中，阻止除了 Shift+Enter 外的 Enter 键
+  if (showPresetsPicker.value && e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    return
+  }
+
+  // 检测 "/" 键
+  if (e.key === '/') {
+    // 不阻止默认行为，让 "/" 字符先输入
+    nextTick(() => {
+      const editor = promptInputRef.value
+      if (!editor) return
+
+      const selection = window.getSelection()
+      if (!selection.rangeCount) return
+
+      const range = selection.getRangeAt(0)
+      const cursorPos = getPromptTextPositionBeforeCursor(editor, range)
+      const fullText = getPromptEditableText()
+      const textBeforeCursor = fullText.slice(0, cursorPos)
+
+      // 检查是否刚刚输入了 "/"
+      const lastSlashIndex = textBeforeCursor.lastIndexOf('/')
+      if (lastSlashIndex !== -1) {
+        const textAfterSlash = textBeforeCursor.slice(lastSlashIndex + 1)
+        // 只有在 "/" 后没有字符（或只有空格）时才显示
+        if (!textAfterSlash || textAfterSlash.trim() === '') {
+          showPresetsPicker.value = true
+          const rect = editor.getBoundingClientRect()
+          presetsPosition.value = {
+            x: rect.left + 10,
+            y: rect.bottom + 5
+          }
+        }
+      }
+    })
+  }
+}
+
+// Handle prompt blur | 处理提示词失去焦点
+const handlePromptBlur = () => {
+  // 延迟隐藏选择器以允许点击事件
+  setTimeout(() => {
+    // 注意：showPresetsPicker 由选择器组件自己管理关闭
+  }, 200)
+}
+
+// Handle preset selection | 处理预置词选择
+const handlePresetSelect = ({ description }) => {
+  const editor = promptInputRef.value
+  if (!editor) return
+
+  const selection = window.getSelection()
+  if (!selection.rangeCount) return
+
+  const range = selection.getRangeAt(0)
+  const cursorPos = getPromptTextPositionBeforeCursor(editor, range)
+  const fullText = getPromptEditableText()
+  const textBeforeCursor = fullText.slice(0, cursorPos)
+  const lastSlashIndex = textBeforeCursor.lastIndexOf('/')
+
+  // 替换 "/" 为预置词描述
+  if (lastSlashIndex !== -1) {
+    // 构建新内容
+    const newText = textBeforeCursor.slice(0, lastSlashIndex) + description + fullText.slice(cursorPos)
+    quickPrompt.value = newText
+
+    // 更新编辑器
+    nextTick(() => {
+      setPromptEditableContent(newText)
+
+      // 将光标移到插入内容之后
+      nextTick(() => {
+        const newRange = document.createRange()
+        const targetPos = lastSlashIndex + description.length
+
+        // 找到合适的位置设置光标
+        const el = promptInputRef.value
+        if (el.firstChild) {
+          newRange.setStart(el.firstChild, Math.min(targetPos, el.firstChild.length || 0))
+        } else {
+          newRange.setStart(el, 0)
+        }
+        newRange.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(newRange)
+
+        // 自动执行生成 - 创建文本节点并触发生成
+        setTimeout(() => {
+          handleGenerateWithPreset(description)
+        }, 100)
+      })
+    })
+  }
+
+  showPresetsPicker.value = false
+}
+
+// Handle generate with preset | 使用预置词触发生成
+const handleGenerateWithPreset = async (presetDescription) => {
+  // 获取当前节点位置
+  const currentNode = nodes.value.find(n => n.id === props.id)
+  const nodeX = currentNode?.position?.x || 0
+  const nodeY = currentNode?.position?.y || 0
+
+  // 创建文本节点并填入预置词
+  const textNodeId = addNode('text', { x: nodeX - 400, y: nodeY }, {
+    content: presetDescription,
+    label: '预置提示词'
+  })
+
+  // 连接文本节点到当前文生图节点
+  addEdge({
+    source: textNodeId,
+    target: props.id,
+    type: 'promptOrder',
+    data: { promptOrder: 1 },
+    sourceHandle: 'right',
+    targetHandle: 'left'
+  })
+
+  // 强制 Vue Flow 重新计算节点尺寸
+  setTimeout(() => {
+    updateNodeInternals(textNodeId)
+  }, 50)
+
+  // 延迟触发生成
+  setTimeout(() => {
+    handleGenerate('auto')
+  }, 200)
+}
+
+// ============ 快速提示词输入相关逻辑结束 ============
 
 // ImageConfig node menu operations | 图片配置节点菜单操作
 const operations = [
@@ -872,5 +1150,40 @@ watch(
 .image-config-node {
   cursor: default;
   position: relative;
+}
+
+/* Textarea wrapper - 参考 TextNode */
+.textarea-wrapper {
+  position: relative;
+}
+
+/* Editor styles | 编辑器样式 */
+.editor-content {
+  min-height: 60px;
+  max-height: 100px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+  outline: none;
+  overflow-y: auto;
+  word-break: break-word;
+  white-space: pre-wrap;
+  border: 1px solid var(--border-color);
+  transition: border-color 0.2s;
+}
+
+.editor-content:focus {
+  border-color: var(--accent-color, #3b82f6);
+}
+
+.editor-content:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-secondary);
+  opacity: 0.5;
+  pointer-events: none;
 }
 </style>

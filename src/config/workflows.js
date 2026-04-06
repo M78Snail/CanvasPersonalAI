@@ -494,7 +494,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'text',
         position: { x: startPosition.x + colSpacing, y: startPosition.y },
         data: {
-          content: '根据角色描述，生成角色的正面全身照，人物居中，白色简洁背景，高清写实风格，电影级画质',
+          content: '根据角色描述，生成角色的正面全身照，中国人面孔，人物居中，白色简洁背景，高清写实风格，电影级画质',
           label: '正面全身提示词'
         }
       })
@@ -532,11 +532,11 @@ export const WORKFLOW_TEMPLATES = [
         type: 'text',
         position: { x: startPosition.x + colSpacing * 3 + 100, y: startPosition.y + rowSpacing },
         data: {
-          content: '参考提供的角色正面图，保持人物外貌、服装完全一致，生成角色的侧面半身照，45度角侧脸，展示五官轮廓，白色简洁背景，高清写实风格',
+          content: '参考提供的角色正面图，保持人物外貌、服装完全一致，中国人面孔，生成角色的侧面半身照，45度角侧脸，展示五官轮廓，白色简洁背景，高清写实风格',
           label: '侧面半身提示词'
         }
       })
-      
+
       // 表情特写提示词
       const closeupPromptId = getNodeId()
       nodes.push({
@@ -544,11 +544,11 @@ export const WORKFLOW_TEMPLATES = [
         type: 'text',
         position: { x: startPosition.x + colSpacing * 3 + 100, y: startPosition.y + rowSpacing * 2 },
         data: {
-          content: '参考提供的角色正面图，保持人物五官、发型完全一致，生成角色的面部特写，展示多种表情（微笑、严肃、惊讶、悲伤），四宫格布局，高清写实风格',
+          content: '参考提供的角色正面图，保持人物五官、发型完全一致，中国人面孔，生成角色的面部特写，展示多种表情（微笑、严肃、惊讶、悲伤），四宫格布局，高清写实风格',
           label: '表情特写提示词'
         }
       })
-      
+
       // 背面全身提示词
       const backPromptId = getNodeId()
       nodes.push({
@@ -556,7 +556,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'text',
         position: { x: startPosition.x + colSpacing * 3 + 100, y: startPosition.y + rowSpacing * 3 },
         data: {
-          content: '参考提供的角色正面图，保持人物发型、服装、身材完全一致，生成角色的背面全身照，展示背影，白色简洁背景，高清写实风格',
+          content: '参考提供的角色正面图，保持人物发型、服装、身材完全一致，中国人面孔，生成角色的背面全身照，展示背影，白色简洁背景，高清写实风格',
           label: '背面全身提示词'
         }
       })
@@ -1099,8 +1099,9 @@ export const WORKFLOW_TEMPLATES = [
 1. 识别故事中的所有角色（主角、配角等）
 2. 提示词包含：外貌特征、服装、表情、姿态、场景
 3. 使用绘本水彩风格描述
-4. 末尾加上"白色简洁背景，儿童绘本水彩风格，温馨治愈，色彩明亮柔和"
-5. 直接输出，不要编号、标题或其他格式标记`,
+4. 所有角色均为中国人面孔
+5. 末尾加上"白色简洁背景，儿童绘本水彩风格，温馨治愈，色彩明亮柔和"
+6. 直接输出，不要编号、标题或其他格式标记`,
           model: 'gpt-4o-mini',
           outputFormat: 'text'
         }
